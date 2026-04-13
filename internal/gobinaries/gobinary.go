@@ -1,5 +1,7 @@
 package gobinaries
 
+import "golang.org/x/mod/semver"
+
 type GoBinary struct {
 	// ModuleURL is the `mod` URL from `go version -m`
 	ModuleURL string
@@ -19,7 +21,15 @@ type GoBinary struct {
 }
 
 func (b *GoBinary) UpgradePossible() bool {
-	return b.Version != b.LatestVersion
+	if b.LatestVersion == "" {
+		return false
+	}
+
+	if !semver.IsValid(b.Version) || !semver.IsValid(b.LatestVersion) {
+		return b.Version != b.LatestVersion
+	}
+
+	return semver.Compare(b.Version, b.LatestVersion) < 0
 }
 
 // BuiltFromSource determines whether the binary was built or installed from source.

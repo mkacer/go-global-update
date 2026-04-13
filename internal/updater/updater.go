@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"text/tabwriter"
 
@@ -68,7 +69,7 @@ func UpdateBinaries(
 
 func resolveBinaryNames(binariesToUpdate []string, lister gobinaries.DirectoryLister, gobin string) ([]string, error) {
 	if len(binariesToUpdate) > 0 {
-		return binariesToUpdate, nil
+		return normalizeBinaryNames(binariesToUpdate, runtime.GOOS), nil
 	}
 
 	binaryNames, err := lister.ListDirectoryEntries(gobin)
@@ -77,6 +78,28 @@ func resolveBinaryNames(binariesToUpdate []string, lister gobinaries.DirectoryLi
 	}
 
 	return binaryNames, err
+}
+
+func normalizeBinaryNames(binaryNames []string, goos string) []string {
+	normalizedBinaryNames := make([]string, len(binaryNames))
+
+	for i, binaryName := range binaryNames {
+		normalizedBinaryNames[i] = normalizeBinaryName(binaryName, goos)
+	}
+
+	return normalizedBinaryNames
+}
+
+func normalizeBinaryName(binaryName, goos string) string {
+	if goos != "windows" {
+		return binaryName
+	}
+
+	if strings.EqualFold(filepath.Ext(binaryName), ".exe") {
+		return binaryName
+	}
+
+	return binaryName + ".exe"
 }
 
 func printBinariesSummary(
@@ -139,7 +162,7 @@ func updateBinaries(
 		if result.Error != nil {
 			continue
 		}
-		if !result.Binary.UpgradePossible() && !options.ForceReinstall {
+		if !result.Binary.UpgradePossible() && !options.ForceReinstall && !result.Binary.BuiltFromSource() {
 			continue
 		}
 
@@ -221,7 +244,7 @@ func updateBinaries(
 func getExecutableBinariesPath(cli *gocli.GoCLI) (string, error) {
 	gobin, err := cli.GetEnvVar("GOBIN")
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 	if len(gobin) > 0 {
 		return gobin, nil
@@ -229,10 +252,10 @@ func getExecutableBinariesPath(cli *gocli.GoCLI) (string, error) {
 
 	gopath, err := cli.GetEnvVar("GOPATH")
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 	if len(gopath) == 0 {
-		return "", errors.New("GOPATH and GOPATH are not defined in 'go env' command")
+		return "", errors.New("GOBIN and GOPATH are not defined in 'go env' command")
 	}
 
 	gobin = filepath.Join(gopath, "bin")

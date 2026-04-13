@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -33,6 +34,37 @@ func gobinMockResponse() goclitest.MockResponse {
 	return goclitest.MockResponse{
 		Args:   []string{"env", "GOBIN"},
 		Output: gobinariestest.GOBIN,
+	}
+}
+
+func TestUpdateBinariesReturnsErrorWhenGOBINLookupFails(t *testing.T) {
+	logger := zap.NewNop()
+	options := Options{}
+	var output bytes.Buffer
+	lister := gobinariestest.TestSuccessDirectoryLister{}
+	cmdRunner := goclitest.TestGoCmdRunner{
+		Responses: []goclitest.MockResponse{
+			{
+				Args:  []string{"env", "GOBIN"},
+				Error: fmt.Errorf("go env failed"),
+			},
+		},
+	}
+
+	err := UpdateBinaries(logger, options, &output, &colors.DecoratorFactory{}, &cmdRunner, &lister, mockFilesystemUtils{})
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "could not determine GOBIN path")
+}
+
+func TestNormalizeBinaryName(t *testing.T) {
+	assert.Equal(t, "shfmt", normalizeBinaryName("shfmt", "linux"))
+	assert.Equal(t, "shfmt.exe", normalizeBinaryName("shfmt", "windows"))
+	assert.Equal(t, "shfmt.exe", normalizeBinaryName("shfmt.exe", "windows"))
+	assert.Equal(t, "shfmt.EXE", normalizeBinaryName("shfmt.EXE", "windows"))
+
+	if runtime.GOOS == "windows" {
+		assert.Equal(t, "shfmt.exe", normalizeBinaryName("shfmt", runtime.GOOS))
 	}
 }
 
@@ -141,7 +173,7 @@ Binary                     Current version      Status
 built-from-source          (devel)              cannot upgrade
 installed-from-source      (devel)              can upgrade to v0.1.0
 
-Skipping upgrading built-from-source
+Skipping reinstalling built-from-source
     The binary was built from source (probably using "go build") and the binary path is unknown.
     Install the binary using "go install repositoryPath@latest" instead.
     This seems like a known problem E001.

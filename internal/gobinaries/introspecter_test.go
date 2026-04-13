@@ -68,6 +68,15 @@ func TestExtractLatestVersion(t *testing.T) {
 	assert.True(t, binary.UpgradePossible())
 }
 
+func TestUpgradePossibleWithNewerLocalVersion(t *testing.T) {
+	binary := gobinaries.GoBinary{
+		Version:       "v0.3.2-0.20260304153955-e6ccb75d1fed",
+		LatestVersion: "v0.3.1",
+	}
+
+	assert.False(t, binary.UpgradePossible())
+}
+
 func TestBuiltFromSourceOnGo116And117(t *testing.T) {
 	mockBinary := gobinariestest.MockBinary{
 		Binary: gobinaries.GoBinary{
